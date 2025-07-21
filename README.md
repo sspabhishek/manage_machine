@@ -1,70 +1,188 @@
-# Getting Started with Create React App
+# 🚀 Targeted Code File Delivery System using AWS S3 + Lambda + DynamoDB
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## 👋 Introduction
 
-## Available Scripts
+This project was built to solve a real-world deployment problem for a friend. The idea was to create a simple but effective system that lets an administrator upload unique code files for each machine (identified via machine ID), and ensure that only the intended machine can download its respective file.
 
-In the project directory, you can run:
+The system is secure, efficient, cloud-hosted on AWS, and easy to extend.
 
-### `npm start`
+---
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## ❓ Problem Statement
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+We had the following problem:
 
-### `npm test`
+> “I have different code files for different machines. I want to upload each machine’s code file from my central system, and ensure that **only that machine** can download and execute its assigned file.”
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Challenges we faced:
+- Handling 150+ machines with their own dedicated files.
+- Preventing file corruption during upload/download.
+- Ensuring only one file exists per machine (old file must be deleted on new upload).
+- Making the system lightweight and cost-efficient (AWS Free Tier friendly).
 
-### `npm run build`
+---
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## 🎯 Requirements & Features
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- 🔒 Secure file upload to AWS S3 using Python API.
+- 🎯 Each file is tied to a specific `machine_id`.
+- 📥 Machine downloads its file via unique signed URL using `machine_id`.
+- ♻️ When a new file is uploaded for the same machine, the **previous file is deleted**.
+- 🗃️ File metadata is stored in **DynamoDB** (machine ID ↔ S3 key mapping).
+- ⚡ Instant file availability via AWS S3.
+- 💬 CORS support and proper headers for frontend integration.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+---
 
-### `npm run eject`
+## 🛠 Tech Stack Used
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+| Layer         | Tools / Services                                 |
+|---------------|--------------------------------------------------|
+| Cloud Storage | AWS S3                                           |
+| API Backend   | AWS Lambda (Python)                              |
+| Database      | AWS DynamoDB                                     |
+| Auth (Basic)  | Machine ID based (can extend to token/API keys)  |
+| Frontend      | React.js (Axios / Fetch based form uploads)      |
+| Infrastructure| IAM Roles, Lambda Permissions, CORS, S3 CORS     |
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+---
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## 🧠 Solution Overview
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+We designed the following system:
 
-## Learn More
+1. **File Upload (Admin only)**  
+   - Admin uploads a file with a query parameter `machine_id`.  
+   - Backend stores the file in S3 under a specific key: `files/{machine_id}/{timestamp}.ext`.  
+   - If a file already exists for that machine, it is **deleted**.  
+   - DynamoDB is updated with the latest file mapping.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+2. **File Download (Machine)**  
+   - Each machine makes a `GET` request with `machine_id`.  
+   - Backend returns a **pre-signed S3 URL** valid for 1 hour.  
+   - Only the file for that machine ID is returned.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+This ensures **targeted delivery, clean versioning**, and easy scalability.
 
-### Code Splitting
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## 🔧 Project Setup Instructions
 
-### Analyzing the Bundle Size
+### 1️⃣ Clone the Project
+```bash
+git clone https://github.com/your-username/aws-machine-file-distributor.git
+cd aws-machine-file-distributor
+```
+### ✅ .env file (placed at the root of your React project)
+```bash
+REACT_APP_API_URL=https://your-api-gateway-url.amazonaws.com/prod
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+### 2️⃣ Create Virtual Environment & Install
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+### 3️⃣ Configure AWS Credentials
+Make sure your local machine or Lambda has AWS credentials with the correct policy:
+```bash
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:*", "dynamodb:*"],
+      "Resource": "*"
+    }
+  ]
+}
+```
+### ☁️ AWS Deployment Guide
+✅ S3 Bucket Setup
+Create an S3 bucket, e.g., machine-code-files
 
-### Making a Progressive Web App
+Enable CORS with:
+```bash
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET", "PUT", "POST"],
+    "AllowedOrigins": ["*"],
+    "ExposeHeaders": []
+  }
+]
+```
+✅ DynamoDB Setup
+Create a table called MachineFiles
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+Primary key: machine_id (string)
 
-### Advanced Configuration
+✅ Lambda Functions
+Deploy two Lambda functions:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+a) Upload Handler
+Trigger: API Gateway (POST)
 
-### Deployment
+Responsibilities:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+Decode base64 multipart form
 
-### `npm run build` fails to minify
+Parse machine_id
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Delete previous file (if any)
+
+Upload new file to S3
+
+Update DynamoDB
+
+b) Download Handler
+Trigger: API Gateway (GET)
+
+Responsibilities:
+Accept machine_id
+
+Lookup S3 key from DynamoDB
+
+Generate a pre-signed URL for 1 hour
+
+✅ API Gateway Setup
+Enable binary support for file uploads
+
+Set CORS headers:
+```bash
+Access-Control-Allow-Origin: *,
+Access-Control-Allow-Methods: POST, GET,
+Access-Control-Allow-Headers: *
+```
+### 💻 Usage Instructions
+Upload (Admin Panel / Script)
+```bash
+POST /upload?machine_id=MACHINE_001
+Content-Type: multipart/form-data
+
+Form:
+  file: (Select your file)
+```
+Old file (if any) is deleted
+New file is uploaded to s3://bucket/files/MACHINE_001/xyz.zip
+
+### Download (Machine-side script)
+```bash
+GET /download?machine_id=MACHINE_001
+```
+Returns a redirect (302) to a signed S3 URL
+Machine downloads only its own file
+
+### 🔮 Future Improvements
+Add API key-based authentication for more secure access.
+Support file versioning or file history logs.
+Add frontend dashboard for file uploads and monitoring.
+Add logging and alerting when machines download files.
+
+### 🙌 Credits / Acknowledgments
+Built using AWS services (S3, Lambda, DynamoDB).
+Special thanks to ChatGPT for planning assistance.
+Inspired by a real-world automation problem faced by a friend!
+
+
